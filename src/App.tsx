@@ -3,6 +3,7 @@ import { ApiError, api, clearSession, hasSession, saveSession } from "./lib/api"
 
 type User = { id: string; name: string; email: string; isAdmin: boolean };
 type Thread = { id: string; name: string; email: string; last_body: string | null };
+type Group = { id: string; title: string; code: string; last_body?: string | null };
 type Message = { id: string; sender_role: "customer" | "admin"; body: string; created_at: string };
 
 export function App() {
@@ -31,23 +32,39 @@ export function App() {
   }, []);
 
   if (!ready) return <p className="p-6 text-sm text-stone-400">Đang mở…</p>;
-  if (!user) return <Login onDone={() => void refresh()} />;
+  if (!user) return <AuthScreen onDone={() => void refresh()} />;
   return <Inbox user={user} onLogout={() => { clearSession(); setUser(null); }} />;
 }
 
-function Login({ onDone }: { onDone: () => void }) {
+function AuthScreen({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (mode === "register") {
+      if (!name.trim()) {
+        setError("Nhập họ tên.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Mật khẩu cần từ 8 ký tự.");
+        return;
+      }
+      if (password !== confirm) {
+        setError("Mật khẩu nhập lại chưa khớp.");
+        return;
+      }
+    }
     try {
-      const data = await api<{ token?: string }>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
+      const path = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const payload = mode === "login" ? { email, password } : { name, email, password };
+      const data = await api<{ token?: string }>(path, { method: "POST", body: JSON.stringify(payload) });
       if (!data.token) {
         setError("Máy chủ chưa trả phiên đăng nhập.");
         return;
@@ -55,43 +72,68 @@ function Login({ onDone }: { onDone: () => void }) {
       saveSession(data.token);
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Không đăng nhập được.");
+      setError(err instanceof ApiError ? err.message : "Không thực hiện được.");
     }
   }
 
   return (
     <form onSubmit={onSubmit} className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-3 px-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">WebStudio</p>
-      <h1 className="text-3xl font-extrabold">Admin</h1>
-      <p className="text-sm text-stone-400">Đăng nhập bằng email đã đặt trong ADMIN_EMAIL trên Worker.</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">WebStudio Admin</p>
+      <h1 className="text-3xl font-extrabold">{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
+      <p className="text-sm text-stone-400">
+        {mode === "login" ? "Dùng email và mật khẩu đã tạo." : "Tạo tài khoản admin mới, rồi vào hộp tin."}
+      </p>
+      {mode === "register" && (
+        <input className="rounded-2xl bg-[#24211f] px-4 py-3" placeholder="Họ tên" value={name} onChange={(event) => setName(event.target.value)} />
+      )}
       <input className="rounded-2xl bg-[#24211f] px-4 py-3" type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} />
       <input className="rounded-2xl bg-[#24211f] px-4 py-3" type="password" placeholder="Mật khẩu" value={password} onChange={(event) => setPassword(event.target.value)} />
+      {mode === "register" && (
+        <input className="rounded-2xl bg-[#24211f] px-4 py-3" type="password" placeholder="Nhập lại mật khẩu" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+      )}
       {error && <p className="text-sm text-red-400">{error}</p>}
-      <button className="rounded-full bg-[#7c5cff] py-3 font-bold">Vào hộp tin</button>
+      <button className="rounded-full bg-[#7c5cff] py-3 font-bold">{mode === "login" ? "Đăng nhập" : "Đăng ký"}</button>
+      <button
+        type="button"
+        className="rounded-full border border-white/15 py-3 text-sm font-bold"
+        onClick={() => {
+          setError("");
+          setMode(mode === "login" ? "register" : "login");
+        }}
+      >
+        {mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}
+      </button>
     </form>
   );
 }
 
 function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
-  async function load(userId?: string) {
-    const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
-    const data = await api<{ threads: Thread[]; messages: Message[]; isAdmin: boolean }>("/api/chat" + query);
+  async function load(target?: string) {
+    const groupId = target?.startsWith("g:") ? target.slice(2) : "";
+    const query = groupId ? `?groupId=${encodeURIComponent(groupId)}` : target ? `?userId=${encodeURIComponent(target)}` : "";
+    const data = await api<{ threads: Thread[]; groups?: Group[]; messages: Message[]; isAdmin: boolean }>("/api/chat" + query);
     if (!data.isAdmin) {
-      setError("Tài khoản này chưa phải admin. Hãy đặt ADMIN_EMAIL trùng email đang đăng nhập, rồi Deploy Worker.");
+      setError("Tài khoản này chưa phải admin. Hãy đăng nhập lại trên trang admin.");
     }
-    setThreads(data.threads);
+    if (data.threads) setThreads(data.threads);
+    if (data.groups) setGroups(data.groups);
     setMessages(data.messages);
   }
 
   useEffect(() => {
-    void load().catch(() => setError("Chưa tải được tin nhắn."));
-  }, []);
+    void load(openId ?? undefined).catch(() => setError("Chưa tải được tin nhắn."));
+    const timer = window.setInterval(() => {
+      void load(openId ?? undefined).catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [openId]);
 
   async function open(id: string) {
     setOpenId(id);
@@ -107,7 +149,10 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
     event.preventDefault();
     const body = text.trim();
     if (!body || !openId) return;
-    await api("/api/chat", { method: "POST", body: JSON.stringify({ body, userId: openId }) });
+    await api("/api/chat", {
+      method: "POST",
+      body: JSON.stringify(openId.startsWith("g:") ? { body, groupId: openId.slice(2) } : { body, userId: openId }),
+    });
     setText("");
     await load(openId);
   }
@@ -128,6 +173,13 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
       <div className="grid gap-4 md:grid-cols-[280px_1fr]">
         <div className="overflow-hidden rounded-3xl bg-[#24211f]">
           {threads.length === 0 && <p className="p-4 text-sm text-stone-400">Chưa có tin từ khách.</p>}
+          {groups.map((group) => (
+            <button key={group.id} type="button" onClick={() => void open("g:" + group.id)} className="block w-full border-b border-white/10 px-4 py-4 text-left last:border-0">
+              <span className="block font-extrabold">{group.title}</span>
+              <span className="mt-1 block text-xs text-violet-300">Nhóm {group.code}</span>
+              <span className="mt-1 block truncate text-sm text-stone-300">{group.last_body || "Chưa có tin"}</span>
+            </button>
+          ))}
           {threads.map((thread) => (
             <button key={thread.id} type="button" onClick={() => void open(thread.id)} className="block w-full border-b border-white/10 px-4 py-4 text-left last:border-0">
               <span className="block font-extrabold">{thread.name}</span>
@@ -140,7 +192,7 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
           {!openId && <p className="text-sm text-stone-400">Chọn một khách để xem nội dung đã soạn.</p>}
           {openId && (
             <div className="space-y-3">
-              <h2 className="text-lg font-extrabold">{current?.name || "Khách"}</h2>
+              <h2 className="text-lg font-extrabold">{openId.startsWith("g:") ? groups.find((item) => "g:" + item.id === openId)?.title || "Nhóm" : current?.name || "Khách"}</h2>
               {messages.map((message) => (
                 <article key={message.id} className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${message.sender_role === "admin" ? "bg-[#3a2d78]" : "bg-[#24211f]"}`}>
                   <p className="mb-1 text-xs text-stone-400">{message.sender_role === "admin" ? "Admin" : "Khách"}</p>
