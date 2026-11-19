@@ -3,10 +3,11 @@ import { ApiError, api, clearSession, fileBase, hasSession, saveSession } from "
 
 type User = { id: string; name: string; email: string; nickname?: string; isAdmin: boolean };
 type Thread = { id: string; name: string; email: string; last_body: string | null; last_at?: string | null; last_sender_id?: string | null };
-type Group = { id: string; title: string; code: string; avatarUrl?: string | null; last_body?: string | null; last_at?: string | null; last_sender_id?: string | null };
+type Group = { id: string; title: string; code: string; owner_id?: string | null; avatarUrl?: string | null; last_body?: string | null; last_at?: string | null; last_sender_id?: string | null };
 type Message = {
   id: string;
   sender_role: "customer" | "admin";
+  sender_id?: string;
   sender_name?: string | null;
   body: string;
   created_at: string;
@@ -124,6 +125,7 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [viewImage, setViewImage] = useState("");
   const [error, setError] = useState("");
   const [menu, setMenu] = useState(false);
   const [setting, setSetting] = useState<"nick" | "email" | "pass" | null>(null);
@@ -302,20 +304,27 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
           </header>
           <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
             {messages.length === 0 && <p className="text-sm text-stone-400">Chưa có tin.</p>}
-            {messages.map((message) => (
-              <article key={message.id} className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${message.sender_role === "admin" ? "ml-auto bg-[#3a2d78]" : "bg-[#24211f]"}`}>
-                <p className="mb-1 flex justify-between gap-3 text-xs text-stone-400"><span>{message.sender_name || (message.sender_role === "admin" ? "Admin" : "Khách")}</span><span>{chatTime(message.created_at)}</span></p>
+            {messages.map((message) => {
+              const fromCustomer = openId.startsWith("g:")
+                ? Boolean(openGroup?.owner_id) && message.sender_id === openGroup?.owner_id
+                : message.sender_role === "customer";
+              const label = message.sender_name || (fromCustomer ? "Khách" : "Thành viên");
+              return (
+              <article key={message.id} className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${fromCustomer ? "bg-[#24211f]" : "ml-auto bg-[#3a2d78]"}`}>
+                <p className="mb-1 flex justify-between gap-3 text-xs text-stone-400"><span>{label}</span><span>{chatTime(message.created_at)}</span></p>
                 {message.body && <p>{message.body}</p>}
-                {message.attachment_key && message.attachment_type?.startsWith("image/") && (
-                  <img src={`${fileBase}/api/files/${message.attachment_key}`} alt="" className="mt-2 max-h-52 rounded-xl object-cover" />
-                )}
-                {message.attachment_key && !message.attachment_type?.startsWith("image/") && (
+                {(message.attachment_key && (message.attachment_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(message.attachment_name || message.attachment_key))) ? (
+                  <button type="button" className="mt-2 block" onClick={() => setViewImage(`${fileBase}/api/files/${message.attachment_key!.split("/").map(encodeURIComponent).join("/")}`)}>
+                    <img src={`${fileBase}/api/files/${message.attachment_key!.split("/").map(encodeURIComponent).join("/")}`} alt="" className="h-24 w-24 rounded-xl object-cover" />
+                  </button>
+                ) : message.attachment_key ? (
                   <a className="mt-2 block font-semibold text-violet-300" href={`${fileBase}/api/files/${message.attachment_key}`} target="_blank" rel="noreferrer">
                     Tệp: {message.attachment_name || "Tải xuống"}
                   </a>
-                )}
+                ) : null}
               </article>
-            ))}
+              );
+            })}
           </div>
           {emojiOpen && (
             <div className="flex gap-2 overflow-auto px-3 pb-2">
@@ -351,6 +360,11 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
             <input value={text} onChange={(event) => setText(event.target.value)} placeholder="Trả lời khách" className="flex-1 rounded-2xl bg-[#24211f] px-4 py-3" />
             <button className="rounded-2xl bg-[#7c5cff] px-4 font-bold">Gửi</button>
           </form>
+        </div>
+      )}
+      {viewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setViewImage("")}>
+          <img src={viewImage} alt="" className="max-h-full max-w-full object-contain" />
         </div>
       )}
     </div>
