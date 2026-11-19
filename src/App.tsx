@@ -1,10 +1,18 @@
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, api, clearSession, hasSession, saveSession } from "./lib/api";
+import { ApiError, api, clearSession, fileBase, hasSession, saveSession } from "./lib/api";
 
 type User = { id: string; name: string; email: string; isAdmin: boolean };
 type Thread = { id: string; name: string; email: string; last_body: string | null };
 type Group = { id: string; title: string; code: string; last_body?: string | null };
-type Message = { id: string; sender_role: "customer" | "admin"; body: string; created_at: string };
+type Message = {
+  id: string;
+  sender_role: "customer" | "admin";
+  body: string;
+  created_at: string;
+  attachment_key?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: string | null;
+};
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -113,6 +121,7 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [error, setError] = useState("");
 
   async function load(target?: string) {
@@ -196,10 +205,48 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
               {messages.map((message) => (
                 <article key={message.id} className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${message.sender_role === "admin" ? "bg-[#3a2d78]" : "bg-[#24211f]"}`}>
                   <p className="mb-1 text-xs text-stone-400">{message.sender_role === "admin" ? "Admin" : "Khách"}</p>
-                  {message.body}
+                  {message.body && <p>{message.body}</p>}
+                  {message.attachment_key && message.attachment_type?.startsWith("image/") && (
+                    <img src={`${fileBase}/api/files/${message.attachment_key}`} alt="" className="mt-2 max-h-52 rounded-xl object-cover" />
+                  )}
+                  {message.attachment_key && !message.attachment_type?.startsWith("image/") && (
+                    <a className="mt-2 block font-semibold text-violet-300" href={`${fileBase}/api/files/${message.attachment_key}`} target="_blank" rel="noreferrer">
+                      Tệp: {message.attachment_name || "Tải xuống"}
+                    </a>
+                  )}
                 </article>
               ))}
+              {emojiOpen && (
+                <div className="flex gap-2 overflow-auto">
+                  {["😀", "😂", "😍", "👍", "🙏", "🎉", "❤️", "😢", "😮", "🔥", "✅"].map((emoji) => (
+                    <button key={emoji} type="button" className="text-2xl" onClick={() => setText((value) => value + emoji)}>
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
               <form onSubmit={(event) => void send(event)} className="flex gap-2">
+                <label className="flex items-center rounded-2xl bg-[#24211f] px-3 text-lg">
+                  📎
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="image/*,.pdf,.zip,.txt,.doc,.docx"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file || !openId) return;
+                      const form = new FormData();
+                      form.set("file", file);
+                      if (openId.startsWith("g:")) form.set("groupId", openId.slice(2));
+                      else form.set("userId", openId);
+                      void api("/api/chat/file", { method: "POST", body: form }).then(() => load(openId));
+                    }}
+                  />
+                </label>
+                <button type="button" className="rounded-2xl bg-[#24211f] px-3 text-lg" onClick={() => setEmojiOpen((value) => !value)}>
+                  😊
+                </button>
                 <input value={text} onChange={(event) => setText(event.target.value)} placeholder="Trả lời khách" className="flex-1 rounded-2xl bg-[#24211f] px-4 py-3" />
                 <button className="rounded-2xl bg-[#7c5cff] px-4 font-bold">Gửi</button>
               </form>
