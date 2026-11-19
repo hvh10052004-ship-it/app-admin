@@ -13,3 +13,21 @@ input,
 textarea {
   font: inherit;
 }
+
+.chat-slide-in {
+  animation: chat-from-left 320ms cubic-bezier(0.22, 0.8, 0.28, 1);
+}
+
+.chat-slide-out {
+  animation: chat-to-right 320ms cubic-bezier(0.22, 0.8, 0.28, 1) forwards;
+}
+
+@keyframes chat-from-left {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes chat-to-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
