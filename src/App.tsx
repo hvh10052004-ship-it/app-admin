@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError, api, clearSession, fileBase, hasSession, saveSession } from "./lib/api";
 
 type User = { id: string; name: string; email: string; nickname?: string; isAdmin: boolean };
-type Thread = { id: string; name: string; email: string; last_body: string | null; last_at?: string | null; last_sender_id?: string | null };
+type Thread = { id: string; name: string; nickname?: string | null; email: string; last_body: string | null; last_at?: string | null; last_sender_id?: string | null };
 type Group = { id: string; title: string; code: string; owner_id?: string | null; avatarUrl?: string | null; last_body?: string | null; last_at?: string | null; last_sender_id?: string | null };
 type Message = {
   id: string;
@@ -302,15 +302,14 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
               )
             )}
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-extrabold">{openId.startsWith("g:") ? openGroup?.title || "Nhóm" : current?.name || "Khách"}</h1>
-              <p className="truncate text-xs text-stone-400">{openId.startsWith("g:") ? "Nhóm khách" : current?.email}</p>
+              <h1 className="truncate text-lg font-extrabold">{openId.startsWith("g:") ? openGroup?.title || "Nhóm" : current?.nickname || current?.name || "Khách"}</h1>
             </div>
           </header>
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
             {messages.length === 0 && <p className="text-sm text-stone-400">Chưa có tin.</p>}
             {messages.map((message) => {
-              const mine = message.sender_id === user.id;
-              const label = message.sender_name || (mine ? user.nickname || user.name : "") || (message.sender_role === "admin" ? "Admin" : "Khách");
+              const mine = Boolean(message.sender_id) && message.sender_id === user.id;
+              const label = message.sender_name || (message.sender_role === "admin" ? "Admin" : "Khách");
               return (
               <article key={message.id} className={`w-fit max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${mine ? "self-start bg-[#24211f]" : "self-end bg-[#3a2d78]"}`}>
                 <p className="mb-1 flex justify-between gap-3 text-xs font-bold text-violet-200"><span>{label}</span><span className="font-semibold text-stone-400">{chatTime(message.created_at)}</span></p>
