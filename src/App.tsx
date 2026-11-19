@@ -188,79 +188,83 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
               <h1 className="text-[28px] font-extrabold tracking-tight">Tin nhắn</h1>
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => { setMenu((value) => !value); setSetting(null); setNotice(""); }} className="flex h-10 w-10 flex-col items-center justify-center gap-1 rounded-2xl bg-[#24211f]" aria-label="Tài khoản">
+              <button type="button" onClick={() => { setMenu(true); setSetting(null); setNotice(""); }} className="flex h-10 w-10 flex-col items-center justify-center gap-1 rounded-2xl bg-[#24211f]" aria-label="Tài khoản">
                 <span className="h-0.5 w-4 bg-white" />
                 <span className="h-0.5 w-4 bg-white" />
                 <span className="h-0.5 w-4 bg-white" />
               </button>
-              <button type="button" onClick={onLogout} className="rounded-2xl bg-[#24211f] px-4 py-2 text-sm font-bold">Đăng xuất</button>
             </div>
           </header>
           {menu && (
-            <div className="overflow-hidden rounded-3xl bg-[#24211f]">
-              {([
-                ["nick", "Biệt danh"],
-                ["email", "Email"],
-                ["pass", "Mật khẩu"],
-              ] as const).map(([id, label]) => (
-                <button key={id} type="button" onClick={() => { setSetting(id); setNotice(""); }} className="block w-full border-b border-white/10 px-4 py-3 text-left font-semibold last:border-0">
-                  {label}
-                </button>
-              ))}
+            <div className="fixed inset-0 z-30">
+              <button type="button" className="absolute inset-0 bg-black/40" aria-label="Đóng" onClick={() => setMenu(false)} />
+              <aside className="chat-slide-in absolute top-0 right-0 flex h-full w-1/2 flex-col overflow-y-auto bg-[#1c1917] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Tài khoản</p>
+                {([
+                  ["nick", "Biệt danh"],
+                  ["email", "Email"],
+                  ["pass", "Mật khẩu"],
+                ] as const).map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => { setSetting(id); setNotice(""); }} className="mt-2 rounded-2xl bg-[#24211f] px-3 py-3 text-left font-semibold">
+                    {label}
+                  </button>
+                ))}
+                {setting === "nick" && (
+                  <form
+                    className="mt-3 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      setNotice("");
+                      void api("/api/me", { method: "PATCH", body: JSON.stringify({ name: user.name, nickname }) })
+                        .then(() => setNotice("Đã lưu biệt danh."))
+                        .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa lưu được."));
+                    }}
+                  >
+                    <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="Biệt danh" className="w-full rounded-2xl bg-[#141210] px-3 py-3" />
+                    <button className="w-full rounded-2xl bg-[#7c5cff] py-3 font-bold">Lưu</button>
+                  </form>
+                )}
+                {setting === "email" && (
+                  <form
+                    className="mt-3 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      setNotice("");
+                      void api("/api/me/security", { method: "POST", body: JSON.stringify({ email, currentPassword, newPassword: "" }) })
+                        .then(() => setNotice("Đã đổi email."))
+                        .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa đổi được email."));
+                    }}
+                  >
+                    <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email mới" className="w-full rounded-2xl bg-[#141210] px-3 py-3" />
+                    <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" placeholder="Mật khẩu hiện tại" className="w-full rounded-2xl bg-[#141210] px-3 py-3" />
+                    <button className="w-full rounded-2xl bg-[#7c5cff] py-3 font-bold">Lưu</button>
+                  </form>
+                )}
+                {setting === "pass" && (
+                  <form
+                    className="mt-3 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      setNotice("");
+                      void api("/api/me/security", { method: "POST", body: JSON.stringify({ email: user.email, currentPassword, newPassword }) })
+                        .then(() => {
+                          setCurrentPassword("");
+                          setNewPassword("");
+                          setNotice("Đã đổi mật khẩu.");
+                        })
+                        .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa đổi được mật khẩu."));
+                    }}
+                  >
+                    <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" placeholder="Mật khẩu hiện tại" className="w-full rounded-2xl bg-[#141210] px-3 py-3" />
+                    <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" placeholder="Mật khẩu mới" className="w-full rounded-2xl bg-[#141210] px-3 py-3" />
+                    <button className="w-full rounded-2xl bg-[#7c5cff] py-3 font-bold">Lưu</button>
+                  </form>
+                )}
+                {notice && <p className="mt-3 text-sm text-violet-200">{notice}</p>}
+                <button type="button" onClick={onLogout} className="mt-auto rounded-2xl bg-[#24211f] py-3 font-bold">Đăng xuất</button>
+              </aside>
             </div>
           )}
-          {setting === "nick" && (
-            <form
-              className="space-y-2 rounded-3xl bg-[#24211f] p-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setNotice("");
-                void api("/api/me", { method: "PATCH", body: JSON.stringify({ name: user.name, nickname }) })
-                  .then(() => setNotice("Đã lưu biệt danh."))
-                  .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa lưu được."));
-              }}
-            >
-              <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="Biệt danh" className="w-full rounded-2xl bg-[#141210] px-4 py-3" />
-              <button className="rounded-2xl bg-[#7c5cff] px-4 py-3 font-bold">Lưu biệt danh</button>
-            </form>
-          )}
-          {setting === "email" && (
-            <form
-              className="space-y-2 rounded-3xl bg-[#24211f] p-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setNotice("");
-                void api("/api/me/security", { method: "POST", body: JSON.stringify({ email, currentPassword, newPassword: "" }) })
-                  .then(() => setNotice("Đã đổi email."))
-                  .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa đổi được email."));
-              }}
-            >
-              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="Email mới" className="w-full rounded-2xl bg-[#141210] px-4 py-3" />
-              <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" placeholder="Mật khẩu hiện tại" className="w-full rounded-2xl bg-[#141210] px-4 py-3" />
-              <button className="rounded-2xl bg-[#7c5cff] px-4 py-3 font-bold">Lưu email</button>
-            </form>
-          )}
-          {setting === "pass" && (
-            <form
-              className="space-y-2 rounded-3xl bg-[#24211f] p-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setNotice("");
-                void api("/api/me/security", { method: "POST", body: JSON.stringify({ email: user.email, currentPassword, newPassword }) })
-                  .then(() => {
-                    setCurrentPassword("");
-                    setNewPassword("");
-                    setNotice("Đã đổi mật khẩu.");
-                  })
-                  .catch((err) => setNotice(err instanceof ApiError ? err.message : "Chưa đổi được mật khẩu."));
-              }}
-            >
-              <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" placeholder="Mật khẩu hiện tại" className="w-full rounded-2xl bg-[#141210] px-4 py-3" />
-              <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" placeholder="Mật khẩu mới" className="w-full rounded-2xl bg-[#141210] px-4 py-3" />
-              <button className="rounded-2xl bg-[#7c5cff] px-4 py-3 font-bold">Lưu mật khẩu</button>
-            </form>
-          )}
-          {notice && <p className="text-sm text-violet-200">{notice}</p>}
           {error && <p className="text-sm text-red-400">{error}</p>}
           {!user.isAdmin && <p className="rounded-2xl bg-[#24211f] p-4 text-sm">Email đang dùng: {user.email}</p>}
           {threads.length === 0 && groups.length === 0 && <p className="text-sm text-stone-400">Chưa có tin từ khách.</p>}
@@ -302,16 +306,14 @@ function Inbox({ user, onLogout }: { user: User; onLogout: () => void }) {
               <p className="truncate text-xs text-stone-400">{openId.startsWith("g:") ? "Nhóm khách" : current?.email}</p>
             </div>
           </header>
-          <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-3">
             {messages.length === 0 && <p className="text-sm text-stone-400">Chưa có tin.</p>}
             {messages.map((message) => {
-              const fromCustomer = openId.startsWith("g:")
-                ? Boolean(openGroup?.owner_id) && message.sender_id === openGroup?.owner_id
-                : message.sender_role === "customer";
-              const label = message.sender_name || (fromCustomer ? "Khách" : "Thành viên");
+              const mine = message.sender_id === user.id;
+              const label = message.sender_name || (mine ? user.nickname || user.name : "") || (message.sender_role === "admin" ? "Admin" : "Khách");
               return (
-              <article key={message.id} className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${fromCustomer ? "bg-[#24211f]" : "ml-auto bg-[#3a2d78]"}`}>
-                <p className="mb-1 flex justify-between gap-3 text-xs text-stone-400"><span>{label}</span><span>{chatTime(message.created_at)}</span></p>
+              <article key={message.id} className={`w-fit max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${mine ? "self-start bg-[#24211f]" : "self-end bg-[#3a2d78]"}`}>
+                <p className="mb-1 flex justify-between gap-3 text-xs font-bold text-violet-200"><span>{label}</span><span className="font-semibold text-stone-400">{chatTime(message.created_at)}</span></p>
                 {message.body && <p>{message.body}</p>}
                 {(message.attachment_key && (message.attachment_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(message.attachment_name || message.attachment_key))) ? (
                   <button type="button" className="mt-2 block" onClick={() => setViewImage(`${fileBase}/api/files/${message.attachment_key!.split("/").map(encodeURIComponent).join("/")}`)}>
